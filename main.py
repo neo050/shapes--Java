@@ -1,8 +1,56 @@
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
-# Pallet class as you provided...
+class Pallet:
+    def __init__(self, width, height, padding=0):
+        self.width = width
+        self.height = height
+        self.padding = padding
+        self.placed_shapes = []
+        self.grid = [[False] * height for _ in range(width)]
 
+    def fit_shape(self, shape):
+        for rotated in [False, True]:
+            current_shape = (shape[1], shape[0]) if rotated else shape
+            padded_shape = (current_shape[0] + self.padding, current_shape[1] + self.padding)
+            best_spot = None
+            min_waste = float('inf')
+
+            for x in range(self.width - padded_shape[0] + 1):
+                for y in range(self.height - padded_shape[1] + 1):
+                    if self.can_place_shape(padded_shape, x, y):
+                        waste = self.calculate_waste(padded_shape, x, y)
+                        if waste < min_waste:
+                            min_waste = waste
+                            best_spot = (x, y, rotated)
+
+            if best_spot is not None:
+                self.place_shape_on_grid(padded_shape, best_spot[0], best_spot[1])
+                self.placed_shapes.append((best_spot[0], best_spot[1], current_shape))
+                return True
+
+        return False
+
+    def can_place_shape(self, shape, x_pos, y_pos):
+        for i in range(x_pos, x_pos + shape[0]):
+            for j in range(y_pos, y_pos + shape[1]):
+                if self.grid[i][j]:
+                    return False
+        return True
+
+    def place_shape_on_grid(self, shape, x, y):
+        for i in range(x, x + shape[0]):
+            for j in range(y, y + shape[1]):
+                self.grid[i][j] = True
+
+    def calculate_waste(self, shape, x, y):
+        waste_area = 0
+        for i in range(x, x + shape[0]):
+            for j in range(y, y + shape[1]):
+                if not self.grid[i][j]:
+                    waste_area += 1
+        return waste_area
+    
 class ImageViewer:
     def __init__(self, pallets, pallet_width, pallet_height):
         self.pallets = pallets
@@ -73,3 +121,37 @@ def get_pallet_dimensions():
         except ValueError:
             print("Invalid input. Please enter two integer values separated by a space.")
 
+def main():
+    pallet_width, pallet_height = get_pallet_dimensions()
+    padding = int(input("Enter padding between shapes (0 for no padding): "))
+    number_of_shapes = int(input("How many shapes do you want to place on the pallet? "))
+
+    shapes_to_cut = []
+    for i in range(1, number_of_shapes + 1):
+        shape_dimensions = get_shape_dimensions(f"Enter the dimensions for shape {i} (width height), or type 'cancel' to skip this shape: ", (pallet_width, pallet_height))
+        if shape_dimensions is None:
+            print(f"Skipping shape {i}.")
+            continue
+        shapes_to_cut.append(shape_dimensions)
+
+    shapes_to_cut.sort(key=lambda s: s[0] * s[1], reverse=True)
+
+    pallets = [Pallet(pallet_width, pallet_height, padding)]
+    for shape in shapes_to_cut:
+        if not pallets[-1].fit_shape(shape):
+            new_pallet = Pallet(pallet_width, pallet_height, padding)
+            new_pallet.fit_shape(shape)
+            pallets.append(new_pallet)
+
+    action = input("Type 'view' to interactively view the pallet images or 'save' to save the images: ").strip().lower()
+    if action == 'view':
+        viewer = ImageViewer(pallets, pallet_width, pallet_height)
+        plt.show()
+    elif action == 'save':
+        for idx, pallet in enumerate(pallets):
+            visualize_packing(pallet_width, pallet_height, pallet.placed_shapes, save=True, file_prefix=f'pallet_layout_{idx}')
+    else:
+        print("Invalid action. Exiting the program.")
+
+if __name__ == "__main__":
+    main()
